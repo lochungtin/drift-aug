@@ -1,0 +1,92 @@
+# Thoracic MRI (supine; any sequence; e.g. TotalSegmentator MRI scans covering the thorax).
+# Never mix with prone breast banks.
+#
+# Label convention (scripts/prepare_totalseg_thorax.py builds it from TotalSegmentator masks):
+#   0 background, 1 lung_left, 2 lung_right, 3 heart, 4 aorta, 5 esophagus, 6 inferior_vena_cava,
+#   7 liver, 8 stomach, 9 spleen, 10 spine (vertebrae + discs), 11 spinal_cord,
+#   12 back muscles (autochthon), 13 scapula, 14 clavicula, 15 humerus.
+name: thorax_mri
+description: >-
+  Supine thoracic MRI. The lungs and abdominal organs slide along the chest wall, which one smooth
+  deformation can't represent; separate compartment registration is available (see below) but off
+  by default, because one well-regularised field matched it on TotalSegmentator MRI. Lung
+  parenchyma has little MR signal (its deformation comes mostly from the regulariser), so lung t is
+  conservative; bones and back muscles follow the background t.
+labels:
+  lung_left: 1
+  lung_right: 2
+  heart: 3
+  aorta: 4
+  esophagus: 5
+  inferior_vena_cava: 6
+  liver: 7
+  stomach: 8
+  spleen: 9
+  spine: 10
+  spinal_cord: 11
+  back_muscles: 12
+  scapula: 13
+  clavicula: 14
+  humerus: 15
+preprocess:
+  orientation: RAS
+  spacing: [1.5, 1.5, 1.5]
+  n4: true
+  normalize: [1.0, 99.0]
+  clip: true
+registration:
+  backend: torch            # NiftyReg (the reference) also works: backend: niftyreg
+  spacing: 3.0
+  similarity: nmi           # sequences differ between scans
+  cp_spacing: 15.0          # mm
+  bending_energy: 0.005
+  linear_elasticity: 0.01
+  jacobian_log: 0.01
+  levels: 3
+  max_iter: 300
+  mask:
+    labels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    threshold: otsu
+    dilate_mm: 15.0
+  # Sliding interfaces: register compartments separately and blend their velocities. Off by
+  # default: on 20 TotalSegmentator chest pairs it gave no Dice gain over one well-regularised
+  # field, cost 2.2x the time and strained the blend zones (a 4 mm blend failed 8/20 pairs on
+  # det J). To try it, uncomment (keep the blend wide):
+  # compartments:
+  #   cavity: {labels: [1, 2, 3, 4, 5, 6]}   # lungs + mediastinum
+  #   abdomen: {labels: [7, 8, 9]}           # organs below the diaphragm
+  #   wall: {labels: []}                     # the rest of the body
+  # blend_sigma_mm: 10.0
+sampling:
+  policy: regional
+  t: [-0.25, 1.25]
+  t_bg: [0.0, 0.5]
+  sigma_mm: 8.0
+  lagrangian: true
+  regions:
+    lungs:
+      labels: [1, 2]
+      t: [0.0, 1.0]         # conservative: deformation inside the lungs is mostly regulariser
+      split_axis: 0         # left/right after RAS reorientation
+    mediastinum:
+      labels: [3, 4, 5, 6]
+    abdomen:
+      labels: [7, 8, 9]
+    musculoskeletal:
+      labels: [10, 11, 12, 13, 14, 15]
+      follow_background: true
+partners:
+  k: 8
+  method: similar
+  feature_labels: [1, 2]    # lung volume
+qc:
+  pair_det_min: 0.05
+  pair_det_max: 20.0
+  pair_max_fold_fraction: 0.0
+  pair_min_dice: 0.7        # lungs + heart + liver + spine + scapulae, after registration
+  pair_dice_labels: [1, 2, 3, 7, 10, 13]
+  pair_dice_each: true
+  det_min: 0.3
+  det_max: 3.0
+  max_disp_mm: 40.0
+store_spacing: 3.0

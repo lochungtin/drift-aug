@@ -1,0 +1,64 @@
+# Breast MRI (prone, bilateral, axial DCE T1; e.g. Duke-Breast-Cancer-MRI pre-contrast).
+#
+# Label convention (one integer label map per subject):
+#   0 background, 1 breast tissue (everything inside the breast mask not listed below),
+#   2 fibroglandular tissue (FGT), 3 vessels, 4 lesion/tumour (when available).
+# The Lew et al. 2024 Duke annotations (breast, dense tissue, vessel masks) map onto 1-3.
+name: breast_mri
+description: >-
+  Prone bilateral breast MRI. Registration is masked to the breasts so air and the coil do not
+  dominate NMI; large control-point spacing and strong regularisation because breast shape varies
+  a lot between patients. Left and right breasts get their own t; lesions follow the background t
+  so their shape is not distorted.
+labels:
+  breast: 1
+  fgt: 2
+  vessels: 3
+  lesion: 4
+preprocess:
+  orientation: RAS
+  spacing: [1.0, 1.0, 1.0]
+  n4: true
+  normalize: [1.0, 99.0]
+  clip: true
+registration:
+  backend: torch            # validated against NiftyReg (the reference) on labelled Duke cases
+  spacing: 2.0              # register on 2 mm copies (control points are 10 mm apart anyway)
+  similarity: nmi
+  cp_spacing: 10.0          # mm
+  bending_energy: 0.005
+  linear_elasticity: 0.01
+  jacobian_log: 0.01
+  levels: 3
+  max_iter: 300
+  mask:
+    labels: [1, 2, 3, 4]
+    threshold: otsu         # body mask (smoothed + opened) when a subject has no labels
+    dilate_mm: 10.0
+sampling:
+  policy: regional
+  t: [-0.25, 1.25]
+  t_bg: [0.0, 0.5]
+  sigma_mm: 6.0
+  lagrangian: true
+  regions:
+    breasts:
+      labels: [1, 2, 3]
+      split_axis: 0         # left/right after RAS reorientation
+    lesion:
+      labels: [4]
+      follow_background: true
+partners:
+  k: 8
+  method: similar
+  feature_labels: [1, 2, 3, 4]   # breast volume
+qc:
+  pair_det_min: 0.05
+  pair_det_max: 20.0
+  pair_max_fold_fraction: 0.0
+  pair_min_dice: 0.7         # whole-breast Dice after registration
+  pair_dice_labels: [1, 2, 3, 4]
+  det_min: 0.3
+  det_max: 3.0
+  max_disp_mm: 40.0
+store_spacing: 2.0
