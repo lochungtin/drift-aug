@@ -33,3 +33,9 @@ inter-patient stationary velocity fields.
   (`partners.feature_source`), so labelled subjects can be paired with unlabelled scans.
 - Integrations: MONAI (`DriftAugmentd`), TorchIO (`RandomDrift`), offline nnU-Net example.
 - CLI: `drift profiles | register | bank build | bank info | sweep | augment`.
+
+## v0.1.0 (2026-11-23)
+
+### Feat
+
+- initial drift-aug package [skip ci]
